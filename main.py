@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from filas import mm1, mms, mm1_k
 import copy
 
