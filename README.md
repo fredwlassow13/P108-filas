@@ -1,8 +1,8 @@
 # Simulação de Filas com Streamlit
 
-![GitHub repo size](https://img.shields.io/github/repo-size/usuario/MM1K-Streamlit?style=for-the-badge)
-![GitHub language count](https://img.shields.io/github/languages/count/usuario/MM1K-Streamlit?style=for-the-badge)
-![GitHub forks](https://img.shields.io/github/forks/usuario/MM1K-Streamlit?style=for-the-badge)
+![GitHub repo size](https://img.shields.io/github/repo-size/fredwlassow13/P108-filas?style=for-the-badge)
+![GitHub language count](https://img.shields.io/github/languages/count/fredwlassow13/P108-filas?style=for-the-badge)
+![GitHub forks](https://img.shields.io/github/forks/fredwlassow13/P108-filas?style=for-the-badge)
 
 > Este projeto implementa uma simulação de cada modelo da teoria das filas, utilizando o Streamlit. Ele permite calcular e visualizar as probabilidades do sistema e as métricas operacionais.
 
