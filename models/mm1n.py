@@ -17,15 +17,18 @@ def mm1n(lam, mu, N):
     else:
         L = (rho * (1 - (N + 1) * rho ** N + N * rho ** (N + 1))) / ((1 - rho) * (1 - rho ** (N + 1)))
 
-
-    W = L / (lam * (1 - pN))
-    Wq = W - 1 / mu
+    Lq = L - (1 - pN)* (1 / mu) * lam
+    lam_eff = lam * (1 - pN)
+    W = L / lam_eff
+    Wq = W - 1 / lam_eff
 
     return {
         "ρ": rho,
         "P0": p0,
         "PN (bloqueio)": pN,
         "L": L,
+        "Lq": Lq,
         "W": W,
-        "Wq": Wq
+        "Wq": Wq,
+        "probs": probs
     }
