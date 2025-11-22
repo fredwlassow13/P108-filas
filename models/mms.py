@@ -20,4 +20,11 @@ def mms(lam, mu, s):
     Wq = Lq / lam
     W = Wq + (1 / mu)
 
-    return [L, Lq, W, Wq, P0, rho]
+    return {
+        "rho": rho,
+        "P0": P0,
+        "L": L,
+        "Lq": Lq,
+        "W": W,
+        "Wq": Wq
+        }

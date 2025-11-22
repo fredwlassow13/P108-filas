@@ -1,49 +1,89 @@
 import math
 
 def mm_s_k(lam, mu, s, K):
-
+    a = lam / mu
     rho = lam / (s * mu)
-    if rho >=1:
-        aviso = "Sistema possivelmente instável  (ρ >= 1)."
-    else:
-        aviso = None
+    aviso = "Sistema no limite da estabilidade (ρ = 1)." if abs(rho - 1) < 1e-12 else None
 
+    # --- CASO 1: ρ = 1 (tratar separado para evitar divisão por zero)
+    if abs(rho - 1) < 1e-12:
 
-    soma = sum((lam / mu) ** n / math.factorial(n) for n in range(s))
-    soma += ((lam / mu) ** s / (math.factorial(s) * (1 - rho))) * (1 - rho ** (K - s + 1))
-    P0 = 1 / soma
+        # P0 especial para ρ = 1
+        sum_terms = sum((a ** n) / math.factorial(n) for n in range(s))
+        tail = (a ** s) / math.factorial(s) * (K - s + 1)
+        P0 = 1 / (sum_terms + tail)
 
-    probs = {}
+        # Probabilidades
+        probs = []
+        for n in range(K + 1):
+            if n < s:
+                pn = P0 * (a ** n) / math.factorial(n)
+            else:
+                pn = P0 * (a ** n) / (math.factorial(s) * (s ** (n - s)))
+            probs.append(pn)
+
+        Pk = probs[K]
+
+        # L = soma n*P(n)
+        L = sum(n * probs[n] for n in range(K + 1))
+
+        # λ efetiva
+        lam_eff = lam * (1 - Pk)
+
+        W = L / lam_eff
+        Wq = W - 1/mu
+        Lq = lam_eff * Wq
+
+        return {
+            "ρ": rho,
+            "P0": P0,
+            "L": L,
+            "Lq": Lq,
+            "W": W,
+            "Wq": Wq,
+            "Pk (bloqueio)": Pk,
+            "aviso": aviso
+        }
+
+    # --- CASO 2: ρ ≠ 1 (fórmulas normais)
+    sum_terms = sum((a ** n) / math.factorial(n) for n in range(s))
+    tail = (a ** s) / math.factorial(s) * (1 - rho ** (K - s + 1)) / (1 - rho)
+    P0 = 1 / (sum_terms + tail)
+
+    # Probabilidades Pn
+    probs = []
     for n in range(K + 1):
         if n < s:
-            Pn = P0 * ((lam / mu) ** n) / math.factorial(n)
-        else :
-            Pn = P0 * ((lam / mu) ** n) / (math.factorial(s) * (s ** (n - s)))
-        probs[f"P{n}"] = Pn
+            pn = P0 * (a ** n) / math.factorial(n)
+        else:
+            pn = P0 * (a ** n) / (math.factorial(s) * (s ** (n - s)))
+        probs.append(pn)
 
-    Pk = probs[f"P{K}"]
+    Pk = probs[K]
 
+    # Lq fórmula completa
     Lq = (
         P0
-        * ((lam / mu) ** s)
+        * (a ** s)
         * rho
         / (math.factorial(s) * (1 - rho) ** 2)
         * (1 - rho ** (K - s + 1) - (K - s + 1) * (1 - rho) * rho ** (K - s))
     )
 
-    L = Lq + lam * (1 - Pk) / mu
+    # L = soma n*P(n) → mais confiável
+    L = sum(n * probs[n] for n in range(K + 1))
 
-    W = L / (lam * (1 - Pk))
-    Wq = W - 1 / mu
+    lam_eff = lam * (1 - Pk)
+    Wq = Lq / lam_eff
+    W = Wq + 1 / mu
 
     return {
         "ρ": rho,
         "P0": P0,
-        **probs,
-        "Pk (bloqueio)": Pk,
-        "Lq": Lq,
         "L": L,
-        "Wq": Wq,
+        "Lq": Lq,
         "W": W,
-        "aviso": aviso,
+        "Wq": Wq,
+        "Pk (bloqueio)": Pk,
+        "aviso": aviso
     }

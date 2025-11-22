@@ -11,4 +11,11 @@ def mm1(lam, mu):
     W = 1 / (mu - lam)
     Wq = lam / (mu * (mu - lam))
 
-    return [L, Lq, W, Wq, P0, rho]
+    return {
+        "rho": rho,
+        "P0": P0,
+        "L": L,
+        "Lq": Lq,
+        "W": W,
+        "Wq": Wq
+    }

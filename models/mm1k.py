@@ -11,20 +11,19 @@ def mm1k(lam, mu, K):
         P0 = (1 - rho)/(1 - rho ** (K + 1))
         L = (rho * (1 - (K+1) * rho ** K + K * rho ** (K + 1))) / ((1 - rho) *(1 - rho ** (K + 1)))
 
-    Pk = P0 * rho ** K
-    Pb = Pk
+    Pb = P0 * rho ** K
+    lam_eff = lam * (1 - Pb)
 
-    W = L / (lam * (1 - Pk))
-    Wq = W - (1 / mu)
-
-    probs = {f"P{n}": P0 * rho ** n for n in range(K + 1)}
+    Lq = L - (1 - P0)
+    W = L / lam_eff
+    Wq = Lq / lam_eff
 
     return {
         "ρ": rho,
-        "P0": P0,
-        **probs,
         "L": L,
+        "Lq": max(Lq, 0),
         "W": W,
-        "Wq": Wq,
-        "Pb (bloqueio)": Pb
+        "Wq": max(Wq, 0),
+        "P0": P0,
+        "Pb": Pb
     }

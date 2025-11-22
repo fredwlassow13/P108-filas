@@ -1,7 +1,16 @@
 import streamlit as st
-from models import mm1, mms, mmc, mm1k, mm1n, mmsk, mg1, priority_queue
+from models import mm1, mms, mm1k, mm1n, mmsn, mg1, priority_queue, mm_infinity, mm_s_k
 
 st.set_page_config(page_title="Teoria das filas")
+st.markdown("""
+<style>
+/* Deixa todos os labels da mesma altura  */
+div[data-testid="stNumberInput"] label,
+div[data-testid="stSelectbox"] label {
+    min-height: 45px;   /* ajuste conforme quiser (40–60 funciona bem) */
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.title("⚙️ Teorias de Filas")
 
@@ -15,7 +24,6 @@ opcao = st.selectbox(
     "Selecione o modelo desejado:",
     ["Selecione", "M/M/1", "M/M/∞", "M/M/s>1", "M/M/1/K", "M/M/s>1/K", "M/M/1/N", "M/M/s>1/N", "M/G/1", "Modelo com prioridades"]
 )
-
 # Inputs comuns
 lam = mu = s = K = N = sigma2 = None
 
@@ -54,6 +62,17 @@ elif opcao == "M/M/1/N":
     with num_cols[1]:
         mu = st.number_input("Taxa de serviço (μ)", min_value=0.0)
     with num_cols[2]:
+        N = st.number_input("Tamanho da população (N)", min_value=1, value=1, step=1)
+
+elif opcao == "M/M/s>1/N":
+    num_cols = st.columns(4)
+    with num_cols[0]:
+        lam = st.number_input("Taxa de chegada (λ)", min_value=0.0)
+    with num_cols[1]:
+        mu = st.number_input("Taxa de serviço (μ)", min_value=0.0)
+    with num_cols[2]:
+        s = st.number_input("Número de servidores (s)", min_value=1, value=1, step=1)
+    with num_cols[3]:
         N = st.number_input("Tamanho da população (N)", min_value=1, value=1, step=1)
 
 elif opcao == "M/G/1":
@@ -100,6 +119,10 @@ if st.button("Calcular"):
                 if lam <= 0 or mu <= 0 or N <= 0:
                     st.error("Preencha todos os valores obrigatórios (λ, μ, N) com valores maiores que 0.")
                     st.stop()
+            elif opcao == "M/M/s>1/N":
+                if lam <= 0 or mu <= 0 or s <= 0 or N <= 0:
+                    st.error("λ, μ, s e N devem ser maiores que zero.")
+                    st.stop()
             elif opcao == "M/G/1":
                 if lam <= 0 or mu <= 0 or sigma2 < 0:
                     st.error("Preencha todos os valores obrigatórios (λ, μ, σ²) com valores válidos.")
@@ -120,51 +143,48 @@ if st.button("Calcular"):
                 st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
 
             elif opcao == "M/M/s>1":
-                L, Lq, W, Wq, P0, rho = mms(lam, mu, s)
+                result = mms(lam, mu, s)
                 st.subheader("Respostas:")
-                st.write(f"**Taxa de ocupação (ρ):** {rho:.4f}")
-                st.write(f"**Probabilidade do sistema vazio (P₀):** {P0:.4f}")
-                st.write(f"**Número médio no sistema (L):** {L:.4f}")
-                st.write(f"**Número médio na fila (Lq):** {Lq:.4f}")
-                st.write(f"**Tempo médio no sistema (W):** {W:.4f}")
-                st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
+                st.write(f"**Taxa de ocupação (ρ):** {result['rho']:.4f}")
+                st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
+                st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
 
             elif opcao == "M/M/1/K":
-                P0, Pn, L, Lq, W, Wq = mm1k(lam, mu, K)
+                result = mm1k(lam, mu, K)
                 st.subheader("Respostas:")
-                st.write(f"**Probabilidade do sistema vazio (P₀):** {P0:.4f}")
-                st.write("**Distribuição de probabilidade P(n):**")
-                for n, p in enumerate(Pn):
-                    st.write(f"P({n}) = {p:.4f}")
-                st.write(f"**Número médio no sistema (L):** {L:.4f}")
-                st.write(f"**Número médio na fila (Lq):** {Lq:.4f}")
-                st.write(f"**Tempo médio no sistema (W):** {W:.4f}")
-                st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
+                st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
+                st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
+                st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
+                st.write(f"**Probabilidade de bloqueio (Pb):** {result['Pb']:.4f}")
 
             elif opcao == "M/M/s>1/K":
-                P0, Pn, L, Lq, W, Wq, rho = mmsk(lam, mu, s, K)
+                result = mm_s_k(lam, mu, s, K)
                 st.subheader("Respostas:")
-                st.write(f"**Probabilidade do sistema vazio (P₀):** {P0:.4f}")
-                st.write(f"**Taxa de ocupação (ρ):** {rho:.4f}")
-                st.write("**Distribuição de probabilidade P(n):**")
-                for n, p in enumerate(Pn):
-                    st.write(f"P({n}) = {p:.4f}")
-                st.write(f"**Número médio no sistema (L):** {L:.4f}")
-                st.write(f"**Número médio na fila (Lq):** {Lq:.4f}")
-                st.write(f"**Tempo médio no sistema (W):** {W:.4f}")
-                st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
+                if result["aviso"]:
+                    st.warning(result["aviso"])
+                st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
+                st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
+                st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
+                st.write(f"**Probabilidade de bloqueio (Pb):** {result['Pk (bloqueio)']:.4f}")
 
             elif opcao == "M/M/∞":
-                result = mmc(lam, mu)
+                result = mm_infinity(lam, mu)
                 st.subheader("Respostas:")
                 st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
                 st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
                 st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
                 st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
                 st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
-                st.write("**Distribuição de probabilidade P(n):**")
-                for n in range(6):
-                    st.write(f"P({n}) = {result[f'P{n}']:.4f}")
+
 
             elif opcao == "M/M/1/N":
                 result = mm1n(lam, mu, N)
@@ -172,22 +192,30 @@ if st.button("Calcular"):
                 st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
                 st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
                 st.write(f"**Probabilidade de bloqueio (PN):** {result['PN (bloqueio)']:.4f}")
-                st.write("**Distribuição de probabilidade P(n):**")
-                for n, p in enumerate(result['probs']):
-                    st.write(f"P({n}) = {p:.4f}")
                 st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
                 st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
                 st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
                 st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
 
-            elif opcao == "M/G/1":
-                L, Lq, W, Wq, rho = mg1(lam, mu, sigma2)
+            elif opcao == "M/M/s>1/N":
+                result = mmsn(lam, mu, s, N)
                 st.subheader("Respostas:")
-                st.write(f"**Taxa de ocupação (ρ):** {rho:.4f}")
-                st.write(f"**Número médio no sistema (L):** {L:.4f}")
-                st.write(f"**Número médio na fila (Lq):** {Lq:.4f}")
-                st.write(f"**Tempo médio no sistema (W):** {W:.4f}")
-                st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
+                st.write(f"**ρ:** {result['ρ']:.4f}")
+                st.write(f"**P₀:** {result['P0']:.4f}")
+                st.write(f"**PN:** {result['PN']:.4f}")
+                st.write(f"**L:** {result['L']:.4f}")
+                st.write(f"**Lq:** {result['Lq']:.4f}")
+                st.write(f"**W:** {result['W']:.4f}")
+                st.write(f"**Wq:** {result['Wq']:.4f}")
+
+            elif opcao == "M/G/1":
+                result = mg1(lam, mu, sigma2)
+                st.subheader("Respostas:")
+                st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
+                st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
 
             elif opcao == "Modelo com prioridades":
                 try:
