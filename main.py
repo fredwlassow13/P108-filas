@@ -1,5 +1,5 @@
 import streamlit as st
-from models import mm1, mms, mm1k, mm1n, mmsn, mg1, priority_queue, mm_infinity, mm_s_k
+from models import mm1, mms, mmc, mm1k, mm1n, mmsn, mg1, priority_queue, mm_infinity, mm_s_k
 
 st.set_page_config(page_title="Teoria das filas")
 st.markdown("""
@@ -22,7 +22,7 @@ if "previous_input" not in st.session_state:
 
 opcao = st.selectbox(
     "Selecione o modelo desejado:",
-    ["Selecione", "M/M/1", "M/M/∞", "M/M/s>1", "M/M/1/K", "M/M/s>1/K", "M/M/1/N", "M/M/s>1/N", "M/G/1", "Modelo com prioridades"]
+    ["Selecione", "M/M/1", "M/M/∞", "M/M/C", "M/M/s>1", "M/M/1/K", "M/M/s>1/K", "M/M/1/N", "M/M/s>1/N", "M/G/1", "Modelo com prioridades"]
 )
 # Inputs comuns
 lam = mu = s = K = N = sigma2 = None
@@ -33,6 +33,15 @@ if opcao in ["M/M/1", "M/M/∞"]:
         lam = st.number_input("Taxa de chegada (λ)", min_value=0.0)
     with num_cols[1]:
         mu = st.number_input("Taxa de serviço (μ)", min_value=0.0)
+
+elif opcao == "M/M/C":
+    num_cols = st.columns(3)
+    with num_cols[0]:
+        lam = st.number_input("Taxa de chegada (λ)", min_value=0.0)
+    with num_cols[1]:
+        mu = st.number_input("Taxa de serviço (μ)", min_value=0.0)
+    with num_cols[2]:
+        c = st.number_input("Número de servidores (C)", min_value=1, value=1, step=1)
 
 elif opcao in ["M/M/s>1", "M/M/s>1/K"]:
     num_cols = st.columns(4 if opcao == "M/M/s>1/K" else 3)
@@ -96,7 +105,6 @@ elif opcao == "Modelo com prioridades":
         tipo = st.selectbox("Tipo de prioridade", ["Não-preemptiva", "Preemptiva"])
 
 
-
 # Botão único para calcular
 if st.button("Calcular"):
     if opcao == "Selecione":
@@ -114,6 +122,10 @@ if st.button("Calcular"):
             elif opcao in ["M/M/1/K"]:
                 if lam <= 0 or mu <= 0 or K <= 0:
                     st.error("Preencha todos os valores obrigatórios (λ, μ, K) com valores maiores que 0.")
+                    st.stop()
+            elif opcao == "M/M/C":
+                if lam <= 0 or mu <= 0 or c <= 0:
+                    st.error("Preencha todos os valores obrigatórios (λ, μ, C) com valores maiores que 0.")
                     st.stop()
             elif opcao == "M/M/1/N":
                 if lam <= 0 or mu <= 0 or N <= 0:
@@ -185,6 +197,18 @@ if st.button("Calcular"):
                 st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
                 st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
 
+            elif opcao == "M/M/C":
+                try:
+                    result = mmc(lam, mu, c)
+                    st.subheader("Respostas:")
+                    st.write(f"**Taxa de ocupação (ρ):** {result['ρ']:.4f}")
+                    st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
+                    st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                    st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                    st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                    st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
+                except ValueError as e:
+                    st.error(f"Erro no cálculo do modelo M/M/C: {e}")
 
             elif opcao == "M/M/1/N":
                 result = mm1n(lam, mu, N)
