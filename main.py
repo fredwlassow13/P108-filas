@@ -145,14 +145,14 @@ if st.button("Calcular"):
                     st.stop()
 
             if opcao == "M/M/1":
-                L, Lq, W, Wq, P0, rho = mm1(lam, mu)
+                result = mm1(lam, mu)
                 st.subheader("Respostas:")
-                st.write(f"**Taxa de ocupação (ρ):** {rho:.4f}")
-                st.write(f"**Probabilidade do sistema vazio (P₀):** {P0:.4f}")
-                st.write(f"**Número médio no sistema (L):** {L:.4f}")
-                st.write(f"**Número médio na fila (Lq):** {Lq:.4f}")
-                st.write(f"**Tempo médio no sistema (W):** {W:.4f}")
-                st.write(f"**Tempo médio na fila (Wq):** {Wq:.4f}")
+                st.write(f"**Taxa de ocupação (ρ):** {result['rho']:.4f}")
+                st.write(f"**Probabilidade do sistema vazio (P₀):** {result['P0']:.4f}")
+                st.write(f"**Número médio no sistema (L):** {result['L']:.4f}")
+                st.write(f"**Número médio na fila (Lq):** {result['Lq']:.4f}")
+                st.write(f"**Tempo médio no sistema (W):** {result['W']:.4f}")
+                st.write(f"**Tempo médio na fila (Wq):** {result['Wq']:.4f}")
 
             elif opcao == "M/M/s>1":
                 result = mms(lam, mu, s)
