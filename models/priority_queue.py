@@ -1,118 +1,196 @@
+# models/priority_queue.py
 import math
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 class MPrioridades:
-    """Fila de prioridade com múltiplas classes, preemptive ou non-preemptive"""
-    def __init__(self, lambda_list: List[float], mu: float, s: int = 1, com_interrupcao: bool = False):
-        """
-        lambda_list: lista de taxas de chegada por classe, ordem da maior para menor prioridade
-        mu: taxa de serviço
-        s: número de servidores
-        com_interrupcao: True para preemptive, False para non-preemptive
-        """
-        self.lambda_list = lambda_list
-        self.mu = mu
-        self.s = s
-        self.com_interrupcao = com_interrupcao
+    """
+    M/G/1 com prioridades (classes ordenadas da mais alta para a mais baixa).
+    Recebe lista de classes: cada classe é dict com:
+      - 'lam' ou 'lambda' : taxa de chegada
+      - 'mu'              : taxa de serviço
+      - 'sigma2'          : variância do tempo de serviço
+    preemptive = True → preemptive-resume (fórmulas clássicas)
+    preemptive = False → non-preemptive (aprox. Kleinrock)
 
-        self.resultados = {}
+    Toda saída fica normalizada para float.
+    """
+    def __init__(self, classes: List[Dict[str, float]], preemptive: bool = True):
+        if not isinstance(classes, list) or len(classes) == 0:
+            raise ValueError("Passe uma lista não-vazia de classes")
+        self.raw_classes = classes
+        self.preemptive = preemptive
+        self._normalize_and_validate()
 
+    def _to_float_safe(self, x, name="value"):
+        try:
+            if x is None:
+                return 0.0
+            return float(x)
+        except Exception:
+            raise ValueError(f"Parâmetro {name} inválido (não numérico): {x!r}")
+
+    def _normalize_and_validate(self):
+        self.m = len(self.raw_classes)
+        self.lams = []
+        self.mus = []
+        self.sigma2s = []
+        self.ES = []
+        self.ES2 = []
+        self.rhos = []
+
+        for i, c in enumerate(self.raw_classes):
+            lam = self._to_float_safe(c.get("lam", c.get("lambda")), f"λ classe {i+1}")
+            mu = self._to_float_safe(c.get("mu"), f"μ classe {i+1}")
+            sigma2 = self._to_float_safe(c.get("sigma2", 0.0), f"σ² classe {i+1}")
+
+            if lam < 0 or mu <= 0 or sigma2 < 0:
+                raise ValueError(f"Parâmetros inválidos classe {i+1}: λ>=0, μ>0, σ²>=0")
+
+            es = 1 / mu
+            es2 = sigma2 + es ** 2
+            rho = lam * es
+
+            self.lams.append(lam)
+            self.mus.append(mu)
+            self.sigma2s.append(sigma2)
+            self.ES.append(es)
+            self.ES2.append(es2)
+            self.rhos.append(rho)
+
+        self.rho_total = sum(self.rhos)
+        if self.rho_total >= 1:
+            raise ValueError(f"Sistema instável: ρ_total = {self.rho_total:.6f} ≥ 1")
+
+    # -----------------------------------------------------
+    # PREEMPTIVE (EXATO)
+    # -----------------------------------------------------
+    def _preemptive_results(self):
+        per_class = {}
+        prefix = 0.0  # soma λ_i E[S_i²]
+
+        for i in range(self.m):
+            lam_i = self.lams[i]
+            es_i = self.ES[i]
+            es2_i = self.ES2[i]
+            rho_i = self.rhos[i]
+
+            prefix += lam_i * es2_i
+
+            sum_rho_before = sum(self.rhos[:i])
+            sum_rho_upto = sum(self.rhos[:i+1])
+
+            denom = 2.0 * (1.0 - sum_rho_before) * (1.0 - sum_rho_upto)
+            if denom <= 0:
+                raise ValueError(f"Estabilidade numérica violada na classe {i+1}.")
+
+            W_i = prefix / denom
+            Wq_i = max(W_i - es_i, 0.0)
+            L_i = lam_i * W_i
+            Lq_i = lam_i * Wq_i
+
+            per_class[i+1] = {
+                "λ": lam_i,
+                "μ": self.mus[i],
+                "σ²": self.sigma2s[i],
+                "ρ": rho_i,
+                "E[S]": es_i,
+                "E[S²]": es2_i,
+                "W": W_i,
+                "Wq": Wq_i,
+                "L": L_i,
+                "Lq": Lq_i,
+            }
+
+        totals = {
+            "ρ_total": self.rho_total,
+            "L": sum(c["L"] for c in per_class.values()),
+            "Lq": sum(c["Lq"] for c in per_class.values()),
+            "W": sum(self.lams[i] * per_class[i+1]["W"] for i in range(self.m)) / sum(self.lams),
+            "Wq": sum(self.lams[i] * per_class[i+1]["Wq"] for i in range(self.m)) / sum(self.lams),
+        }
+
+        return {"per_class": per_class, "totals": totals}
+
+    # -----------------------------------------------------
+    # NON-PREEMPTIVE (APROX. KLEINROCK)
+    # -----------------------------------------------------
+    def _non_preemptive_approx(self):
+        per_class = {}
+        lambda_total = sum(self.lams)
+        sum_lambda_es2 = sum(self.lams[i] * self.ES2[i] for i in range(self.m))
+
+        for i in range(self.m):
+            lam_i = self.lams[i]
+            es_i = self.ES[i]
+            es2_i = self.ES2[i]
+
+            rho_upto = sum(self.rhos[:i+1])
+            if rho_upto >= 1:
+                raise ValueError(f"Instabilidade parcial até classe {i+1}")
+
+            base = sum_lambda_es2 / (2 * (1 - self.rho_total))
+            Wq_i = base / (1 - rho_upto)
+            W_i = Wq_i + es_i
+            Lq_i = lam_i * Wq_i
+            L_i = lam_i * W_i
+
+            per_class[i+1] = {
+                "λ": lam_i,
+                "μ": self.mus[i],
+                "σ²": self.sigma2s[i],
+                "ρ": self.rhos[i],
+                "E[S]": es_i,
+                "E[S²]": es2_i,
+                "W": W_i,
+                "Wq": Wq_i,
+                "L": L_i,
+                "Lq": Lq_i,
+            }
+
+        totals = {
+            "ρ_total": self.rho_total,
+            "L": sum(c["L"] for c in per_class.values()),
+            "Lq": sum(c["Lq"] for c in per_class.values()),
+            "W": sum(self.lams[i] * per_class[i+1]["W"] for i in range(self.m)) / lambda_total,
+            "Wq": sum(self.lams[i] * per_class[i+1]["Wq"] for i in range(self.m)) / lambda_total,
+        }
+
+        return {"per_class": per_class, "totals": totals, "aviso": "Aproximação non-preemptive (Kleinrock)"}
+
+    # -----------------------------------------------------
+    # RESOLVER (PRINCIPAL)
+    # -----------------------------------------------------
     def calcular(self):
-        if self.com_interrupcao:
-            return self._calcular_preemptive()
-        else:
-            return self._calcular_non_preemptive()
-
-    def _calcular_preemptive(self):
-        resultados = {}
-        rho_list = []
-        L_list = []
-        Lq_list = []
-        W_list = []
-        Wq_list = []
-
-        rho_acum = 0
-        for i, lam in enumerate(self.lambda_list):
-            rho_i = lam / self.mu
-            rho_acum += rho_i
-            if rho_acum >= 1:
-                raise ValueError(f"Sistema instável: ρ total ≥ 1 após classe {i+1}")
-
-            # alta prioridade
-            L_i = rho_i / (1 - rho_acum + rho_i)
-            Lq_i = L_i - rho_i
-            W_i = L_i / lam if lam > 0 else 0
-            Wq_i = Lq_i / lam if lam > 0 else 0
-
-            rho_list.append(rho_i)
-            L_list.append(L_i)
-            Lq_list.append(Lq_i)
-            W_list.append(W_i)
-            Wq_list.append(Wq_i)
-
-            resultados[i+1] = {"λ": lam, "L": L_i, "Lq": Lq_i, "W": W_i, "Wq": Wq_i, "ρ": rho_i}
-
-        # Sistema total
-        lambda_total = sum(self.lambda_list)
-        L_total = sum(L_list)
-        Lq_total = sum(Lq_list)
-        W_total = sum(lam * W for lam, W in zip(self.lambda_list, W_list)) / lambda_total
-        Wq_total = sum(lam * Wq for lam, Wq in zip(self.lambda_list, Wq_list)) / lambda_total
-        rho_total = sum(rho_list)
-
-        resultados["sistema"] = {
-            "ρ": rho_total,
-            "L": L_total,
-            "Lq": Lq_total,
-            "W": W_total,
-            "Wq": Wq_total
-        }
-
-        return resultados
-
-    def _calcular_non_preemptive(self):
-        # Para non-preemptive, usamos aproximação de duas classes
-        if len(self.lambda_list) < 2:
-            self.lambda_list += [0] * (2 - len(self.lambda_list))  # garante duas classes
-
-        lam_high, lam_low = self.lambda_list[:2]
-        rho_high = lam_high / self.mu
-        rho_low = lam_low / self.mu
-        rho_total = rho_high + rho_low
-
-        if rho_total >= 1:
-            raise ValueError("Sistema instável (ρ ≥ 1)")
-
-        # Média no sistema
-        L_high = rho_high / (1 - rho_total)
-        L_low = (rho_low * (1 + rho_high)) / (1 - rho_total)
-        L = L_high + L_low
-
-        # Média na fila
-        Lq_high = rho_high ** 2 / (1 - rho_total)
-        Lq_low = (rho_low ** 2 + 2 * rho_high * rho_low) / (1 - rho_total)
-        Lq = Lq_high + Lq_low
-
-        # Tempos
-        W_high = L_high / lam_high if lam_high > 0 else 0
-        W_low = L_low / lam_low if lam_low > 0 else 0
-        W = (lam_high * W_high + lam_low * W_low) / (lam_high + lam_low)
-        Wq_high = Lq_high / lam_high if lam_high > 0 else 0
-        Wq_low = Lq_low / lam_low if lam_low > 0 else 0
-        Wq = (lam_high * Wq_high + lam_low * Wq_low) / (lam_high + lam_low)
-
-        resultados = {
-            1: {"λ": lam_high, "L": L_high, "Lq": Lq_high, "W": W_high, "Wq": Wq_high, "ρ": rho_high},
-            2: {"λ": lam_low, "L": L_low, "Lq": Lq_low, "W": W_low, "Wq": Wq_low, "ρ": rho_low},
-            "sistema": {"ρ": rho_total, "L": L, "Lq": Lq, "W": W, "Wq": Wq}
-        }
-
-        return resultados
+        if self.preemptive:
+            return self._preemptive_results()
+        return self._non_preemptive_approx()
 
     def resolver(self):
-        self.resultados = self.calcular()
+        out = self.calcular()
+
+        medidas = {
+            "L": float(out["totals"]["L"]),
+            "Lq": float(out["totals"]["Lq"]),
+            "W": float(out["totals"]["W"]),
+            "Wq": float(out["totals"]["Wq"]),
+            "ρ": float(out["totals"]["ρ_total"]),
+        }
+
+        probabilidades = {
+            "P(0)": float(max(0.0, 1 - out["totals"]["ρ_total"])),
+            "ρ_total": float(out["totals"]["ρ_total"]),
+        }
+
         return {
-            "Modelo": f"Prioridade {'com' if self.com_interrupcao else 'sem'} interrupção",
-            "Medidas de Efetividade": self.resultados["sistema"],
-            "Resultados por Classe": {k: v for k, v in self.resultados.items() if k != "sistema"}
+            "Modelo": "M/G/1 com prioridades (preemptive)" if self.preemptive else "M/G/1 com prioridades (non-preemptive, approx)",
+            "Parâmetros": {
+                "classes": [
+                    {"λ": float(self.lams[i]), "μ": float(self.mus[i]), "σ²": float(self.sigma2s[i]), "ρ": float(self.rhos[i])}
+                    for i in range(self.m)
+                ],
+            },
+            "Medidas de Efetividade": medidas,
+            "Probabilidades": probabilidades,
+            "Resultados por Classe": out["per_class"],
+            **({"aviso": out.get("aviso")} if out.get("aviso") else {})
         }
